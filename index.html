@@ -1061,28 +1061,48 @@
             return total > 0 ? Math.round((done / total) * 100) : 0;
         }
         
-        // Calculer progression détaillée (compte les rangs)
+        // Calculer progression détaillée (compte les MAILLES tricotées)
         function calculateProgressDetailed(project) {
             if (!project.sections || project.sections.length === 0) return 0;
             
-            let totalRangs = 0;
-            let doneRangs = 0;
+            let totalMailles = 0;
+            let doneMailles = 0;
             
             project.sections.forEach(section => {
                 section.steps.forEach(step => {
+                    // Calculer les mailles finales de cette sous-partie (avec augmentations/diminutions)
+                    let maillesFinales = step.mailles;
+                    
+                    if (step.hasModification && step.detailRangs) {
+                        const nbModifs = Math.floor(step.rangs / step.frequenceModification);
+                        const totalModif = nbModifs * step.maillesModification;
+                        
+                        if (step.modificationType === 'augmentation') {
+                            maillesFinales = step.mailles + totalModif;
+                        } else {
+                            maillesFinales = step.mailles - totalModif;
+                        }
+                    }
+                    
+                    // Calculer les mailles totales à tricoter (moyenne entre début et fin × rangs)
+                    const maillesTotales = Math.round(((step.mailles + maillesFinales) / 2) * step.rangs);
+                    totalMailles += maillesTotales;
+                    
                     if (step.detailRangs) {
                         // Suivi rang par rang
-                        totalRangs += step.rangs;
-                        doneRangs += (step.rangsDone || []).length;
+                        const rangsDone = (step.rangsDone || []).length;
+                        const progressRatio = rangsDone / step.rangs;
+                        doneMailles += Math.round(maillesTotales * progressRatio);
                     } else {
                         // Checkbox simple
-                        totalRangs += 1;
-                        if (step.done) doneRangs += 1;
+                        if (step.done) {
+                            doneMailles += maillesTotales;
+                        }
                     }
                 });
             });
             
-            return totalRangs > 0 ? Math.round((doneRangs / totalRangs) * 100) : 0;
+            return totalMailles > 0 ? Math.round((doneMailles / totalMailles) * 100) : 0;
         }
         
         // Navigation
@@ -1288,6 +1308,7 @@
                                     <div class="step-name">${step.name}${progressText}</div>
                                     <div class="step-details">${step.mailles}m × ${step.rangs}r</div>
                                 </div>
+                                <button class="btn btn-secondary btn-small" onclick="editStep(${sIndex}, ${stIndex})" style="margin-left: auto;">✏️</button>
                             </div>
                         `;
                         
@@ -1551,6 +1572,29 @@
             currentProject.sections[sIndex].steps.push(newStep);
             
             console.log('Nombre de steps dans la section:', currentProject.sections[sIndex].steps.length);
+            
+            const projectIndex = projects.findIndex(p => p.id === currentProject.id);
+            projects[projectIndex] = currentProject;
+            saveProjects();
+            renderProjectContent();
+        }
+        
+        async function editStep(sIndex, stIndex) {
+            const step = currentProject.sections[sIndex].steps[stIndex];
+            
+            const name = prompt('Nom de la sous-partie', step.name);
+            if (name) step.name = name.trim();
+            
+            const mailles = parseInt(prompt('Nombre de mailles de départ', step.mailles));
+            if (mailles && mailles > 0) step.mailles = mailles;
+            
+            const rangs = parseInt(prompt('Nombre de rangs total', step.rangs));
+            if (rangs && rangs > 0) step.rangs = rangs;
+            
+            // Si modification des rangs et suivi détaillé, réinitialiser rangsDone
+            if (step.detailRangs && rangs !== step.rangs) {
+                step.rangsDone = [];
+            }
             
             const projectIndex = projects.findIndex(p => p.id === currentProject.id);
             projects[projectIndex] = currentProject;
